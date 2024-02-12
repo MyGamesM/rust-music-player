@@ -90,5 +90,12 @@ impl Song {
         );
     }
 
-    // pub fn tags(&self) {} TODO
+    pub fn title(&self) -> Option<String> {
+        return self.title.clone();
+    }
+
+    pub fn tags(&self) -> Vec<Option<String>> {
+        let v = vec![self.title.clone(), self.artist.clone(), self.album.clone()];
+        return v;
+    }
 }
