@@ -14,7 +14,7 @@ pub struct Song {
 
 #[allow(dead_code)]
 impl Song {
-    pub fn new(path: PathBuf) -> Song {
+    pub fn new(path: PathBuf) -> Self {
         let mut song = Song {
             title: None,
             artist: None,
@@ -94,8 +94,12 @@ impl Song {
         return self.title.clone();
     }
 
-    pub fn tags(&self) -> Vec<Option<String>> {
-        let v = vec![self.title.clone(), self.artist.clone(), self.album.clone()];
+    pub fn tags(&self) -> Vec<String> {
+        let v = vec![
+            self.title.clone().unwrap().clone(),
+            self.artist.clone().unwrap().clone(),
+            self.album.clone().unwrap().clone(),
+        ];
         return v;
     }
 }
