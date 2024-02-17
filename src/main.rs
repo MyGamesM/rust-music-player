@@ -50,40 +50,60 @@ fn ui(app: &App, f: &mut Frame) {
 }
 
 fn ui1(app: &App, f: &mut Frame) {
-    let tags: Vec<String> = app.queue.next_clone().unwrap().tags();
+    // let items: Vec<String> = app.queue.next_clone().unwrap().tags();
+
+    let items = std::fs::read_dir("/mnt/hdd/Music/Albums/Bullet Hell II/").unwrap();
+
+    let borders = vec![
+        Block::default().borders(Borders::TOP | Borders::LEFT | Borders::RIGHT),
+        Block::default().borders(Borders::LEFT | Borders::RIGHT),
+        Block::default().borders(Borders::BOTTOM | Borders::LEFT | Borders::RIGHT),
+    ];
 
     let layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints(vec![
-            Constraint::Max(5),
             Constraint::Max(3),
+            Constraint::Min(1),
             Constraint::Max(3),
         ])
         .split(f.size());
 
-    let list = List::new(tags) // find a way to make a list where you can select items
-        .block(Block::default().title("List").borders(Borders::ALL))
-        .style(Style::default().fg(Color::White))
-        .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
-        .highlight_symbol(">>")
-        .repeat_highlight_symbol(true)
-        .direction(ListDirection::BottomToTop);
+    f.render_widget(
+        Paragraph::new("Rust Music Player").block(Block::default().borders(Borders::ALL)),
+        layout[0],
+    );
 
-    // for i in 0..3 {
-    // let text: String = tags.tags()[i].as_mut().unwrap().to_string();
-    f.render_widget(list, layout[0]);
-    // }
+    let paths = items
+        .map(|e| String::from(e.unwrap().path().to_str().unwrap()))
+        .collect::<Vec<String>>();
 
-    // app.queue
-    //     .next_clone()
-    //     .unwrap()
-    //     .tags()
-    //     .iter()
-    //     .enumerate()
-    //     .for_each(|(i, tag)| {
-    //         let area = Rect::new(0, i.try_into().unwrap(), f.size().width, 1);
-    //         f.render_widget(Paragraph::new(tag.clone().unwrap()), area);
-    //     });
+    paths.iter().enumerate().for_each(|(i, path)| {
+        let area = Rect::new(0, i as u16 + layout[0].height, layout[1].width, 1);
+
+        let border = if i == 0 {
+            borders[0].clone()
+        } else if i == paths.len() - 1 {
+            borders[2].clone()
+        } else {
+            borders[1].clone()
+        };
+
+        f.render_widget(
+            Paragraph::new(String::from(
+                path.strip_prefix("/mnt/hdd/Music/Albums/Bullet Hell II/")
+                    .unwrap(),
+            ))
+            .block(border),
+            area,
+        )
+    });
+
+    f.render_widget(
+        Paragraph::new(app.queue.next_clone().unwrap().tags()[0].clone())
+            .block(Block::default().title("Now playing").borders(Borders::ALL)),
+        layout[2],
+    );
 }
 
 fn ui2(app: &App, f: &mut Frame) {
@@ -101,7 +121,7 @@ fn ui2(app: &App, f: &mut Frame) {
         layout[0],
     );
 
-    let blocks = vec![
+    let borders = vec![
         Block::default().borders(Borders::TOP | Borders::LEFT | Borders::RIGHT),
         Block::default().borders(Borders::LEFT | Borders::RIGHT),
         Block::default().borders(Borders::BOTTOM | Borders::LEFT | Borders::RIGHT),
@@ -125,7 +145,7 @@ fn ui2(app: &App, f: &mut Frame) {
         .enumerate()
         .for_each(|(i, tag)| {
             f.render_widget(
-                Paragraph::new(Text::styled(tag.clone(), Style::new())).block(blocks[i].clone()),
+                Paragraph::new(Text::styled(tag.clone(), Style::new())).block(borders[i].clone()),
                 middle[i],
             );
         });
