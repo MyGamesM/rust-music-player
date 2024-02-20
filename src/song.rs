@@ -1,105 +1,132 @@
+use anyhow::{bail, Result};
 use audiotags::Tag;
-use metadata;
+use metadata::media_file::MediaFileMetadata;
 use std::path::PathBuf;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Song {
-    title: Option<String>,
-    artist: Option<String>,
-    album: Option<String>,
-    duration: Option<u64>,
-    path: Option<PathBuf>,
+    title: String,
+    artist: String,
+    album: String,
+    track_number: u16,
+    duration: u64,
+    path: PathBuf,
 }
 
 #[allow(dead_code)]
+#[derive(Default)]
+pub struct SongBuilder {
+    title: String,
+    artist: String,
+    album: String,
+    track_number: u16,
+    duration: u64,
+    path: PathBuf,
+}
+
 impl Song {
-    pub fn new(path: PathBuf) -> Self {
-        let mut song = Song {
-            title: None,
-            artist: None,
-            album: None,
-            duration: None,
-            path: Some(path),
-        };
+    pub fn new() -> SongBuilder {
+        SongBuilder::default()
+    }
+}
 
-        song.validate_path();
-        song.load_tags();
-
-        return song;
+#[allow(dead_code)]
+impl SongBuilder {
+    pub fn new() -> Self {
+        SongBuilder {
+            title: String::from(""),
+            artist: String::from(""),
+            album: String::from(""),
+            track_number: 0,
+            duration: 0,
+            path: PathBuf::new(),
+        }
     }
 
-    fn load_tags(&mut self) {
-        let tag = Tag::new()
-            .read_from_path(self.path.as_ref().unwrap())
-            .unwrap();
+    pub fn from_path(mut self, path: &PathBuf) -> Result<SongBuilder> {
+        if !path.exists() {
+            bail!("Song: Path does not exist");
+        }
 
-        self.title = Some(tag.title().unwrap().to_owned());
+        self.path = path.clone();
 
-        self.album = Some(tag.album().unwrap().title.to_string());
+        let tag = Tag::new().read_from_path(path).unwrap();
 
-        match tag.album().unwrap().artist {
-            Some(artist) => self.artist = Some(artist.to_owned()),
+        self.title = match tag.title() {
+            Some(title) => title.to_string(),
+            None => bail!("Song: Title"),
+        };
+
+        let album = match tag.album() {
+            Some(album) => album,
+            None => bail!("Song: album"),
+        };
+
+        self.album = album.title.to_string();
+
+        let duration = match MediaFileMetadata::new(&self.path) {
+            Ok(media) => media,
+            Err(_e) => bail!("Song: Duration"),
+        };
+
+        match album.artist {
+            Some(artist) => self.artist = artist.to_owned(),
             None => panic!("Err: Artist"),
         }
 
-        let duration = metadata::media_file::MediaFileMetadata::new(self.path.as_ref().unwrap())
-            .unwrap()
-            ._duration;
-
-        match duration {
-            Some(duration) => {
-                self.duration = Some(duration.ceil() as u64);
-            }
-            None => panic!("Err: Duration"),
+        match tag.track_number() {
+            Some(t) => self.track_number = t,
+            None => bail!("Song: track number"),
         }
+
+        match duration._duration {
+            Some(duration) => self.duration = duration.ceil() as u64,
+            None => bail!("Song: duration"),
+        }
+
+        Ok(self)
     }
 
-    fn validate_path(&self) -> bool {
-        match &self.path.as_ref().unwrap().try_exists() {
-            Ok(result) => {
-                if *result {
-                    return *result;
-                } else {
-                    panic!("Err: validate_path File does not exist!");
-                }
-            }
-            Err(e) => panic!("Err: validate_path {}", e),
+    pub fn build(self) -> Song {
+        Song {
+            title: self.title,
+            artist: self.artist,
+            album: self.album,
+            track_number: self.track_number,
+            duration: self.duration,
+            path: self.path,
         }
     }
+}
 
+impl Song {
+    #![allow(dead_code)]
     pub fn duration_in_minutes_and_seconds(&self) -> String {
-        return format!(
-            "{}m {}s",
-            self.duration.unwrap() / 60,
-            self.duration.unwrap() % 60
-        );
-    }
-
-    pub fn duration_in_seconds(&self) -> u64 {
-        return self.duration.unwrap();
+        format!("{}m {}s", self.duration / 60, self.duration % 60)
     }
 
     pub fn print(&self) {
         println!(
             "Title: {}\nArtist: {}\nAlbum: {}\nLength: {}",
-            self.title.as_ref().unwrap(),
-            self.artist.as_ref().unwrap(),
-            self.album.as_ref().unwrap(),
+            self.title,
+            self.artist,
+            self.album,
             self.duration_in_minutes_and_seconds()
         );
     }
 
-    pub fn title(&self) -> Option<String> {
-        return self.title.clone();
+    pub fn title(&self) -> String {
+        self.title.clone()
     }
 
     pub fn tags(&self) -> Vec<String> {
         let v = vec![
-            self.title.clone().unwrap().clone(),
-            self.artist.clone().unwrap().clone(),
-            self.album.clone().unwrap().clone(),
+            self.title.clone(),
+            self.artist.clone(),
+            self.album.clone(),
+            String::from(self.track_number.clone().to_string()),
         ];
-        return v;
+        v
     }
 }
