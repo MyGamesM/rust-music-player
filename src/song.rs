@@ -4,7 +4,7 @@ use metadata::media_file::MediaFileMetadata;
 use std::path::PathBuf;
 
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Song {
     title: String,
     artist: String,
@@ -25,9 +25,45 @@ pub struct SongBuilder {
     path: PathBuf,
 }
 
+#[allow(dead_code)]
 impl Song {
     pub fn new() -> SongBuilder {
         SongBuilder::default()
+    }
+}
+
+impl Song {
+    #![allow(dead_code)]
+    pub fn duration_in_minutes_and_seconds(&self) -> String {
+        format!("{}m {}s", self.duration / 60, self.duration % 60)
+    }
+
+    pub fn print(&self) {
+        println!(
+            "Title: {}\nArtist: {}\nAlbum: {}\nLength: {}",
+            self.title,
+            self.artist,
+            self.album,
+            self.duration_in_minutes_and_seconds()
+        );
+    }
+
+    pub fn title(&self) -> String {
+        self.title.clone()
+    }
+
+    pub fn track_number(&self) -> &u16 {
+        &self.track_number
+    }
+
+    pub fn tags(&self) -> Vec<String> {
+        let v = vec![
+            self.title.clone(),
+            self.artist.clone(),
+            self.album.clone(),
+            String::from(self.track_number.clone().to_string()),
+        ];
+        v
     }
 }
 
@@ -97,36 +133,5 @@ impl SongBuilder {
             duration: self.duration,
             path: self.path,
         }
-    }
-}
-
-impl Song {
-    #![allow(dead_code)]
-    pub fn duration_in_minutes_and_seconds(&self) -> String {
-        format!("{}m {}s", self.duration / 60, self.duration % 60)
-    }
-
-    pub fn print(&self) {
-        println!(
-            "Title: {}\nArtist: {}\nAlbum: {}\nLength: {}",
-            self.title,
-            self.artist,
-            self.album,
-            self.duration_in_minutes_and_seconds()
-        );
-    }
-
-    pub fn title(&self) -> String {
-        self.title.clone()
-    }
-
-    pub fn tags(&self) -> Vec<String> {
-        let v = vec![
-            self.title.clone(),
-            self.artist.clone(),
-            self.album.clone(),
-            String::from(self.track_number.clone().to_string()),
-        ];
-        v
     }
 }
