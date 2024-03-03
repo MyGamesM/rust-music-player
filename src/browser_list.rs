@@ -172,19 +172,6 @@ impl BrowserState {
             }
         }
 
-        // if self.get_file_type() == FileType::FILE {
-        //     let new_path = PathBuf::from(format!(
-        //         "{}/{}",
-        //         &self.path.display(),
-        //         &self.get_current_file().unwrap()
-        //     ));
-        //
-        //     // match &new_path.extension() {
-        //     //     Some(ext) => println!("{:?}", ext.to_str().or(Some("None2"))),
-        //     //     None => println!("{:?}", &new_path),
-        //     // }
-        // }
-
         let _ = self.update_state();
     }
 

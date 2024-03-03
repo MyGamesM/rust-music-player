@@ -3,14 +3,12 @@ mod playlist;
 mod queue;
 mod song;
 
-use browser_list::{BrowserState, BrowserStateBuilder};
-use color_eyre::eyre::{eyre, Result};
+use browser_list::{BrowserState, BrowserStateBuilder, FileType};
+use color_eyre::{eyre, eyre::Result};
 use event::KeyCode;
-use queue::Queue;
 use rodio::Sink;
-#[allow(unused_imports)]
 use rodio::{Decoder, OutputStream};
-use std::{env, path::PathBuf, sync::mpsc, thread}; /*fs::File, io::BufReader,*/
+use std::{env, fs::File, io::BufReader, panic, path::PathBuf, sync::mpsc, thread};
 // use playlist::PlaylistBuilder;
 // use song::Song;
 
@@ -26,11 +24,9 @@ use ratatui::{prelude::*, widgets::*};
 #[derive(PartialEq)]
 enum Screen {
     ONE,
-    TWO,
     QUEUE,
     PLAYLISTS,
     BROWSER,
-    TEST,
 }
 
 #[derive(PartialEq)]
@@ -39,21 +35,27 @@ enum PlayerState {
     PAUSED,
 }
 
+enum ThreadCommand {
+    SONG,
+    PlayPause,
+    END,
+    SKIP,
+}
+
 struct App {
     running: bool,
-    player_state: PlayerState,
     browser_state: BrowserState,
-    queue: Queue,
     screen: Screen,
-    tx: crate::mpsc::Sender<PathBuf>,
+    tx: crate::mpsc::Sender<ThreadMessage>,
+}
+
+struct ThreadMessage {
+    command: ThreadCommand,
+    msg: Option<String>,
 }
 
 impl App {
     pub fn play_song(&self) -> Result<()> {
-        if self.player_state == PlayerState::PLAYING {
-            // self.sink.skip_one();
-        }
-
         let file = self
             .browser_state
             .get_current_file()
@@ -76,22 +78,18 @@ impl App {
             file
         ));
 
-        match self.tx.send(path.into()) {
-            Ok(()) => Ok(()),
-            Err(_e) => Err(eyre!("Kita bre")),
-        }
+        self.tx.send(ThreadMessage {
+            command: ThreadCommand::SONG,
+            msg: Some(path),
+        })?;
 
-        // The sound plays in a separate audio thread,
-        // so we need to keep the main thread alive while it's playing.
-        // std::thread::sleep(std::time::Duration::from_secs(song_duration));
+        Ok(())
     }
 }
 
 fn startup() -> Result<()> {
     enable_raw_mode()?;
     execute!(std::io::stderr(), EnterAlternateScreen)?;
-
-    color_eyre::install()?;
 
     Ok(())
 }
@@ -105,27 +103,15 @@ fn shutdown() -> Result<()> {
 fn ui(app: &mut App, f: &mut Frame) -> Result<()> {
     match app.screen {
         Screen::ONE => Ok(ui1(app, f)),
-        Screen::TWO => Ok(ui2(app, f)?),
         Screen::BROWSER => Ok(browser_list::browser(app, f)?),
         _ => Ok(()),
     }
 }
 
 fn ui1(_app: &App, f: &mut Frame) {
-    // let items = std::fs::read_dir("/mnt/hdd/Music/Albums/Bullet Hell II/").unwrap();
-
-    let layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(vec![
-            Constraint::Max(3),
-            Constraint::Min(1),
-            Constraint::Max(3),
-        ])
-        .split(f.size());
-
     f.render_widget(
         Paragraph::new("Rust Music Player").block(Block::default().borders(Borders::ALL)),
-        layout[0],
+        f.size(),
     );
 
     // let items = items
@@ -138,70 +124,6 @@ fn ui1(_app: &App, f: &mut Frame) {
     //         }
     //     })
     //     .collect::<Vec<String>>();
-    //
-    // f.render_widget(
-    //     // selecting??
-    //     List::new(items)
-    //         .block(Block::default().title("List").borders(Borders::ALL))
-    //         .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
-    //         .highlight_symbol("$")
-    //         .repeat_highlight_symbol(true),
-    //     layout[1],
-    // );
-
-    // f.render_widget(
-    //     Paragraph::new(app.queue.next_clone().unwrap().tags()[0].clone())
-    //         .block(Block::default().title("Now playing").borders(Borders::ALL)),
-    //     layout[2],
-    // );
-}
-
-fn ui2(app: &App, f: &mut Frame) -> Result<()> {
-    let layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(vec![
-            Constraint::Max(3),
-            Constraint::Min(1),
-            Constraint::Max(3),
-        ])
-        .split(f.size());
-
-    f.render_widget(
-        Paragraph::new("Kita").block(Block::default().borders(Borders::ALL)),
-        layout[0],
-    );
-
-    // let borders = vec![
-    //     Block::default().borders(Borders::TOP | Borders::LEFT | Borders::RIGHT),
-    //     Block::default().borders(Borders::LEFT | Borders::RIGHT),
-    //     Block::default().borders(Borders::BOTTOM | Borders::LEFT | Borders::RIGHT),
-    // ];
-
-    app.queue
-        .next_clone()
-        .unwrap()
-        .tags()
-        .iter()
-        .enumerate()
-        .for_each(|(i, tag)| {
-            let area = Rect::new(0, i as u16 + layout[0].height, layout[1].width, 1);
-
-            f.render_widget(
-                Paragraph::new(Text::styled(tag.clone(), Style::new())),
-                // .block(border.clone()),
-                area,
-            );
-        });
-
-    f.render_widget(Paragraph::new(""), layout[1]);
-
-    f.render_widget(
-        Paragraph::new(app.queue.next_clone().unwrap().tags()[0].clone())
-            .block(Block::default().title("Now playing").borders(Borders::ALL)),
-        layout[2],
-    );
-
-    Ok(())
 }
 
 fn update(app: &mut App) -> Result<()> {
@@ -210,10 +132,21 @@ fn update(app: &mut App) -> Result<()> {
             if key.kind == event::KeyEventKind::Press {
                 match key.code {
                     Char('q') => app.running = false,
+                    // change screens
                     Char('1') => app.screen = Screen::ONE,
-                    Char('2') => app.screen = Screen::TWO,
                     Char('4') => app.screen = Screen::BROWSER,
-                    Char('0') => app.screen = Screen::TEST,
+                    // player controls
+                    Char('p') => app.tx.send(ThreadMessage {
+                        command: ThreadCommand::PlayPause,
+                        msg: None,
+                    })?,
+                    Char('s') => app
+                        .tx
+                        .send(ThreadMessage {
+                            command: ThreadCommand::SKIP,
+                            msg: None,
+                        })
+                        .unwrap(),
                     _ => {}
                 }
 
@@ -221,9 +154,16 @@ fn update(app: &mut App) -> Result<()> {
                     match key.code {
                         Char('j') => app.browser_state.next(),
                         Char('k') => app.browser_state.previous(),
-                        Char('p') => app.play_song()?,
                         Char('r') => app.browser_state.update_state()?,
-                        KeyCode::Enter => app.browser_state.select(),
+                        KeyCode::Enter => match app.browser_state.get_file_type() {
+                            FileType::FILE => {
+                                app.play_song()?;
+                            }
+                            FileType::DIRECTORY => {
+                                app.browser_state.select();
+                            }
+                            FileType::NONE => {}
+                        },
                         KeyCode::Backspace => app.browser_state.pop(),
                         _ => {}
                     }
@@ -234,43 +174,59 @@ fn update(app: &mut App) -> Result<()> {
     Ok(())
 }
 
-fn init_player_thread(
-    rx: std::sync::mpsc::Receiver<PathBuf>,
-) -> Result<crate::thread::JoinHandle<()>> {
-    let handle = thread::spawn(move || {
+fn init_player_thread(rx: std::sync::mpsc::Receiver<ThreadMessage>) -> Result<()> {
+    thread::spawn(move || {
+        let mut player_state = PlayerState::PAUSED;
+
         let (_stream, stream_handle) = OutputStream::try_default().unwrap();
-        let _sink = Sink::try_new(&stream_handle).unwrap();
+        let sink = Sink::try_new(&stream_handle).unwrap();
 
-        // TODO close thread
         loop {
-            println!(
-                "{}",
-                rx.recv().unwrap().into_os_string().into_string().unwrap()
-            );
+            let message = rx.recv().unwrap();
+
+            match message.command {
+                ThreadCommand::PlayPause => match player_state {
+                    PlayerState::PLAYING => {
+                        sink.pause();
+                        player_state = PlayerState::PAUSED;
+                    }
+                    PlayerState::PAUSED => {
+                        sink.play();
+                        player_state = PlayerState::PLAYING;
+                    }
+                },
+                ThreadCommand::SONG => {
+                    let file =
+                        BufReader::new(File::open(PathBuf::from(message.msg.unwrap())).unwrap());
+
+                    let source = Decoder::new(file).unwrap();
+
+                    sink.append(source);
+                }
+                ThreadCommand::SKIP => sink.skip_one(),
+                ThreadCommand::END => break,
+            }
         }
-
-        // // Load a sound from a file, using a path relative to Cargo.toml
-        // let file = BufReader::new(File::open(&path).unwrap());
-        // // Decode that sound file into a source
-        // let source = Decoder::new(file).unwrap();
-
-        // make this run on a seperate thread
     });
 
-    Ok(handle)
+    Ok(())
+}
+
+fn shutdown_player_thread(app: &App) -> Result<()> {
+    app.tx
+        .send(ThreadMessage {
+            command: ThreadCommand::END,
+            msg: None,
+        })
+        .unwrap();
+
+    Ok(())
 }
 
 fn run() -> Result<()> {
-    let (tx, rx) = mpsc::channel::<PathBuf>();
+    let (tx, rx) = mpsc::channel::<ThreadMessage>();
 
     init_player_thread(rx)?;
-
-    let q: Queue = Queue {
-        queue: vec![],
-        playing: 0,
-    };
-
-    // q.add(Song::new().from_path(&path)?.build());
 
     let path = PathBuf::from(env::current_dir()?);
 
@@ -278,14 +234,10 @@ fn run() -> Result<()> {
 
     let mut app = App {
         running: true,
-        player_state: PlayerState::PAUSED,
         browser_state,
-        queue: q,
         screen: Screen::BROWSER,
         tx,
     };
-
-    app.tx.send("hi".into()).unwrap();
 
     let mut terminal = Terminal::new(CrosstermBackend::new(std::io::stderr()))?;
 
@@ -297,6 +249,7 @@ fn run() -> Result<()> {
         })?;
 
         if !app.running {
+            shutdown_player_thread(&app)?;
             break;
         }
     }
@@ -304,8 +257,31 @@ fn run() -> Result<()> {
     Ok(())
 }
 
+pub fn install_hooks() -> Result<()> {
+    // add any extra configuration you need to the hook builder
+    let hook_builder = color_eyre::config::HookBuilder::default();
+    let (panic_hook, eyre_hook) = hook_builder.into_hooks();
+
+    // convert from a color_eyre PanicHook to a standard panic hook
+    let panic_hook = panic_hook.into_panic_hook();
+    panic::set_hook(Box::new(move |panic_info| {
+        shutdown().unwrap();
+        panic_hook(panic_info);
+    }));
+
+    // convert from a color_eyre EyreHook to a eyre ErrorHook
+    let eyre_hook = eyre_hook.into_eyre_hook();
+    eyre::set_hook(Box::new(move |error| {
+        shutdown().unwrap();
+        eyre_hook(error)
+    }))?;
+
+    Ok(())
+}
+
 fn main() -> Result<()> {
     startup()?;
+    install_hooks()?;
 
     let result = run();
 
