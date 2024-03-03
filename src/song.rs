@@ -1,5 +1,5 @@
-use anyhow::{bail, Result};
 use audiotags::Tag;
+use color_eyre::eyre::{eyre, Result};
 use metadata::media_file::MediaFileMetadata;
 use std::path::PathBuf;
 
@@ -82,7 +82,7 @@ impl SongBuilder {
 
     pub fn from_path(mut self, path: &PathBuf) -> Result<SongBuilder> {
         if !path.exists() {
-            bail!("Song: Path does not exist");
+            return Err(eyre!("Song: Path does not exist"));
         }
 
         self.path = path.clone();
@@ -91,34 +91,34 @@ impl SongBuilder {
 
         self.title = match tag.title() {
             Some(title) => title.to_string(),
-            None => bail!("Song: Title"),
+            None => return Err(eyre!("Song: Title")),
         };
 
         let album = match tag.album() {
             Some(album) => album,
-            None => bail!("Song: album"),
+            None => return Err(eyre!("Song: album")),
         };
 
         self.album = album.title.to_string();
 
         let duration = match MediaFileMetadata::new(&self.path) {
             Ok(media) => media,
-            Err(_e) => bail!("Song: Duration"),
+            Err(_e) => return Err(eyre!("Song: Duration")),
         };
 
         match album.artist {
             Some(artist) => self.artist = artist.to_owned(),
-            None => panic!("Err: Artist"),
+            None => panic!("return Err: Artist"),
         }
 
         match tag.track_number() {
             Some(t) => self.track_number = t,
-            None => bail!("Song: track number"),
+            None => return Err(eyre!("Song: track number")),
         }
 
         match duration._duration {
             Some(duration) => self.duration = duration.ceil() as u64,
-            None => bail!("Song: duration"),
+            None => return Err(eyre!("Song: duration")),
         }
 
         Ok(self)

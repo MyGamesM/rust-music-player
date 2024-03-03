@@ -1,5 +1,5 @@
 use crate::App;
-use anyhow::{bail, Ok, Result};
+use color_eyre::eyre::Result;
 use ratatui::{prelude::*, widgets::*};
 use std::fs::metadata;
 use std::path::PathBuf;
@@ -45,10 +45,7 @@ impl BrowserStateBuilder {
     }
 
     pub fn path(mut self, path: PathBuf) -> Result<Self> {
-        let items = match std::fs::read_dir(&path) {
-            std::result::Result::Ok(files) => files,
-            Err(e) => bail!(format!("Error reading path {}", e)),
-        };
+        let items = std::fs::read_dir(&path)?;
 
         self.path = Some(path);
 
@@ -85,10 +82,12 @@ impl BrowserState {
     }
 
     pub fn update_state(&mut self) -> Result<()> {
-        let items = match std::fs::read_dir(&self.path) {
-            std::result::Result::Ok(files) => files,
-            Err(e) => bail!(format!("Error reading path {}", e)),
-        };
+        // let items = match std::fs::read_dir(&self.path) {
+        //     std::result::Result::Ok(files) => files,
+        //     Err(e) => bail!(format!("Error reading path {}", e)),
+        // };
+
+        let items = std::fs::read_dir(&self.path)?;
 
         let mut i = match self.state.selected() {
             Some(i) => i,
@@ -113,10 +112,12 @@ impl BrowserState {
 
         let new_path = format!("{}/{}", &self.path.display(), &self.items[i]);
 
-        let md = match metadata(&new_path) {
-            std::result::Result::Ok(md) => md,
-            Err(e) => bail!(format!("Error reading file metadata: {}\n{}", e, new_path)),
-        };
+        // let md = match metadata(&new_path) {
+        //     std::result::Result::Ok(md) => md,
+        //     Err(e) => bail!(format!("Error reading file metadata: {}\n{}", e, new_path)),
+        // };
+
+        let md = metadata(&new_path)?;
 
         if md.is_dir() {
             self.file_type = Some(FileType::DIRECTORY);
@@ -171,18 +172,18 @@ impl BrowserState {
             }
         }
 
-        if self.get_file_type() == FileType::FILE {
-            let new_path = PathBuf::from(format!(
-                "{}/{}",
-                &self.path.display(),
-                &self.get_current_file().unwrap()
-            ));
-
-            match &new_path.extension() {
-                Some(ext) => println!("{:?}", ext.to_str().or(Some("None2"))),
-                None => println!("{:?}", &new_path),
-            }
-        }
+        // if self.get_file_type() == FileType::FILE {
+        //     let new_path = PathBuf::from(format!(
+        //         "{}/{}",
+        //         &self.path.display(),
+        //         &self.get_current_file().unwrap()
+        //     ));
+        //
+        //     // match &new_path.extension() {
+        //     //     Some(ext) => println!("{:?}", ext.to_str().or(Some("None2"))),
+        //     //     None => println!("{:?}", &new_path),
+        //     // }
+        // }
 
         let _ = self.update_state();
     }

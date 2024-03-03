@@ -1,5 +1,5 @@
 use crate::song::{Song, SongBuilder};
-use anyhow::{bail, Result};
+use color_eyre::eyre::{eyre, Result};
 use permutation::permutation;
 use std::fs;
 use std::path::PathBuf;
@@ -19,6 +19,7 @@ pub struct PlaylistBuilder {
     songs: Vec<Song>,
 }
 
+#[allow(dead_code)]
 impl Playlist {
     pub fn songs(&self) -> &Vec<Song> {
         &self.songs
@@ -37,35 +38,37 @@ impl PlaylistBuilder {
 
     pub fn from_path(mut self, path: &str) -> Result<PlaylistBuilder> {
         if !PathBuf::from(path).exists() {
-            bail!("Path does not exist")
+            return Err(eyre!("Path does not exist"));
         }
 
-        let names = match fs::read_dir(path) {
-            Ok(path) => path,
-            Err(e) => bail!("Playlist: {}", e),
-        }
-        .filter_map(|entry| {
-            entry.ok().and_then(|e| {
-                e.path()
-                    .file_name()
-                    .and_then(|n| n.to_str().map(|s| String::from(s)))
+        // let names = match fs::read_dir(path) {
+        //     Ok(path) => path,
+        //     Err(e) => Err(eyre!("Playlist: {}", e)),
+        // }
+
+        let names = fs::read_dir(path)?
+            .filter_map(|entry| {
+                entry.ok().and_then(|e| {
+                    e.path()
+                        .file_name()
+                        .and_then(|n| n.to_str().map(|s| String::from(s)))
+                })
             })
-        })
-        .collect::<Vec<String>>();
+            .collect::<Vec<String>>();
 
         self.songs = names
             .iter()
             .map(|name| {
-                match SongBuilder::new().from_path(&PathBuf::from(format!("{}/{}", path, name))) {
-                    Ok(song) => song.build(),
-                    Err(e) => panic!("{}", e), // wtf bail dont work?????
-                }
+                SongBuilder::new()
+                    .from_path(&PathBuf::from(format!("{}/{}", path, name)))
+                    .expect("REASON")
+                    .build()
             })
             .collect::<Vec<Song>>();
 
         self.name = match path.split("/").last() {
             Some(s) => s.to_string(),
-            None => bail!("Playlist: splitting path"),
+            None => return Err(eyre!("Playlist: splitting path")),
         };
 
         self.length = self.songs.len() as u32;
