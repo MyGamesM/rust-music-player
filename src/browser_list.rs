@@ -32,6 +32,23 @@ pub struct BrowserStateBuilder {
     current_file: PathBuf,
 }
 
+fn read_dir(path: &PathBuf) -> Option<Vec<String>> {
+    let reader = std::fs::read_dir(&path).ok()?;
+    let mut items = reader
+        .filter_map(|entry| {
+            entry.ok().and_then(|e| {
+                e.path()
+                    .file_name()
+                    .and_then(|n| n.to_str().map(|s| String::from(s)))
+            })
+        })
+        .collect::<Vec<String>>();
+
+    items.retain(|item| !item.starts_with("."));
+
+    Some(items)
+}
+
 impl BrowserStateBuilder {
     pub fn new() -> Self {
         BrowserStateBuilder {
@@ -45,19 +62,9 @@ impl BrowserStateBuilder {
     }
 
     pub fn path(mut self, path: PathBuf) -> Result<Self> {
-        let items = std::fs::read_dir(&path)?;
+        self.items = read_dir(&path).expect("Error while reading dir");
 
         self.path = Some(path);
-
-        self.items = items
-            .filter_map(|entry| {
-                entry.ok().and_then(|e| {
-                    e.path()
-                        .file_name()
-                        .and_then(|n| n.to_str().map(|s| String::from(s)))
-                })
-            })
-            .collect::<Vec<String>>();
 
         Ok(self)
     }
@@ -82,40 +89,18 @@ impl BrowserState {
     }
 
     pub fn update_state(&mut self) -> Result<()> {
-        // let items = match std::fs::read_dir(&self.path) {
-        //     std::result::Result::Ok(files) => files,
-        //     Err(e) => bail!(format!("Error reading path {}", e)),
-        // };
-
-        let items = std::fs::read_dir(&self.path)?;
+        self.items = read_dir(&self.path).expect("Error while reading dir");
 
         let mut i = match self.state.selected() {
             Some(i) => i,
             None => 0,
         };
 
-        // let i = 0;
-
-        self.items = items
-            .filter_map(|entry| {
-                entry.ok().and_then(|e| {
-                    e.path()
-                        .file_name()
-                        .and_then(|n| n.to_str().map(|s| String::from(s)))
-                })
-            })
-            .collect::<Vec<String>>();
-
         if i > self.items.len() - 1 {
             i = 0;
         }
 
         let new_path = format!("{}/{}", &self.path.display(), &self.items[i]);
-
-        // let md = match metadata(&new_path) {
-        //     std::result::Result::Ok(md) => md,
-        //     Err(e) => bail!(format!("Error reading file metadata: {}\n{}", e, new_path)),
-        // };
 
         let md = metadata(&new_path)?;
 

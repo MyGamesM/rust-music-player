@@ -4,11 +4,14 @@ mod queue;
 mod song;
 
 use browser_list::{BrowserState, BrowserStateBuilder, FileType};
-use color_eyre::{eyre, eyre::Result};
+use color_eyre::{
+    eyre,
+    eyre::{Report, Result},
+};
 use event::KeyCode;
 use rodio::Sink;
 use rodio::{Decoder, OutputStream};
-use std::{env, fs::File, io::BufReader, panic, path::PathBuf, sync::mpsc, thread};
+use std::{fs::File, io, io::BufReader, panic, path::PathBuf, sync::mpsc, thread};
 // use playlist::PlaylistBuilder;
 // use song::Song;
 
@@ -36,8 +39,9 @@ enum PlayerState {
 }
 
 enum ThreadCommand {
+    NONE,
     SONG,
-    PlayPause,
+    PLAYPAUSE,
     END,
     SKIP,
 }
@@ -137,7 +141,7 @@ fn update(app: &mut App) -> Result<()> {
                     Char('4') => app.screen = Screen::BROWSER,
                     // player controls
                     Char('p') => app.tx.send(ThreadMessage {
-                        command: ThreadCommand::PlayPause,
+                        command: ThreadCommand::PLAYPAUSE,
                         msg: None,
                     })?,
                     Char('s') => app
@@ -182,10 +186,17 @@ fn init_player_thread(rx: std::sync::mpsc::Receiver<ThreadMessage>) -> Result<()
         let sink = Sink::try_new(&stream_handle).unwrap();
 
         loop {
-            let message = rx.recv().unwrap();
+            let message = match rx.recv() {
+                Ok(message) => message,
+                Err(_e) => ThreadMessage {
+                    command: ThreadCommand::NONE,
+                    msg: None,
+                },
+            };
 
             match message.command {
-                ThreadCommand::PlayPause => match player_state {
+                ThreadCommand::NONE => {}
+                ThreadCommand::PLAYPAUSE => match player_state {
                     PlayerState::PLAYING => {
                         sink.pause();
                         player_state = PlayerState::PAUSED;
@@ -202,6 +213,7 @@ fn init_player_thread(rx: std::sync::mpsc::Receiver<ThreadMessage>) -> Result<()
                     let source = Decoder::new(file).unwrap();
 
                     sink.append(source);
+                    player_state = PlayerState::PLAYING;
                 }
                 ThreadCommand::SKIP => sink.skip_one(),
                 ThreadCommand::END => break,
@@ -228,9 +240,19 @@ fn run() -> Result<()> {
 
     init_player_thread(rx)?;
 
-    let path = PathBuf::from(env::current_dir()?);
+    let home_dir = match home::home_dir() {
+        Some(path) => path,
+        None => {
+            return Err(Report::new(io::Error::new(
+                io::ErrorKind::Other,
+                "Could not find home directory!",
+            )));
+        }
+    };
 
-    let browser_state = BrowserStateBuilder::new().path(path)?.build();
+    // let path = PathBuf::from(env::current_dir()?);
+
+    let browser_state = BrowserStateBuilder::new().path(home_dir)?.build();
 
     let mut app = App {
         running: true,
