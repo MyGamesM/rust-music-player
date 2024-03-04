@@ -1,6 +1,5 @@
 mod browser_list;
 mod playlist;
-mod queue;
 mod song;
 
 use browser_list::{BrowserState, BrowserStateBuilder, FileType};
