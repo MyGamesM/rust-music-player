@@ -1,5 +1,6 @@
 mod browser_list;
 mod playlist;
+mod screen_welcome;
 mod song;
 
 use browser_list::{BrowserState, BrowserStateBuilder, FileType};
@@ -10,7 +11,10 @@ use color_eyre::{
 use event::KeyCode;
 use rodio::Sink;
 use rodio::{Decoder, OutputStream};
-use std::{fs::File, io, io::BufReader, panic, path::PathBuf, sync::mpsc, thread};
+use screen_welcome::screen_welcome;
+use std::{
+    fs::File, io, io::BufReader, panic, path::PathBuf, sync::mpsc, sync::mpsc::Sender, thread,
+};
 // use playlist::PlaylistBuilder;
 // use song::Song;
 
@@ -25,7 +29,7 @@ use ratatui::{prelude::*, widgets::*};
 #[allow(dead_code)]
 #[derive(PartialEq)]
 enum Screen {
-    ONE,
+    WELCOME,
     QUEUE,
     PLAYLISTS,
     BROWSER,
@@ -49,7 +53,7 @@ struct App {
     running: bool,
     browser_state: BrowserState,
     screen: Screen,
-    tx: crate::mpsc::Sender<ThreadMessage>,
+    tx: Sender<ThreadMessage>,
 }
 
 struct ThreadMessage {
@@ -100,34 +104,35 @@ fn startup() -> Result<()> {
 fn shutdown() -> Result<()> {
     execute!(std::io::stderr(), LeaveAlternateScreen)?;
     disable_raw_mode()?;
+
     Ok(())
 }
 
 fn ui(app: &mut App, f: &mut Frame) -> Result<()> {
     match app.screen {
-        Screen::ONE => Ok(ui1(app, f)),
         Screen::BROWSER => Ok(browser_list::browser(app, f)?),
+        Screen::WELCOME => Ok(screen_welcome(app, f)?),
         _ => Ok(()),
     }
 }
 
-fn ui1(_app: &App, f: &mut Frame) {
-    f.render_widget(
-        Paragraph::new("Rust Music Player").block(Block::default().borders(Borders::ALL)),
-        f.size(),
-    );
-
-    // let items = items
-    //     .map(|e| {
-    //         let song_name = String::from(e.unwrap().path().to_str().unwrap());
-    //
-    //         match song_name.strip_prefix("/mnt/hdd/Music/Albums/Bullet Hell II/") {
-    //             Some(s) => String::from(s),
-    //             None => String::from("Kita"),
-    //         }
-    //     })
-    //     .collect::<Vec<String>>();
-}
+// fn ui1(_app: &App, f: &mut Frame) {
+//     f.render_widget(
+//         Paragraph::new("Rust Music Player").block(Block::default().borders(Borders::ALL)),
+//         f.size(),
+//     );
+//
+//     // let items = items
+//     //     .map(|e| {
+//     //         let song_name = String::from(e.unwrap().path().to_str().unwrap());
+//     //
+//     //         match song_name.strip_prefix("/mnt/hdd/Music/Albums/Bullet Hell II/") {
+//     //             Some(s) => String::from(s),
+//     //             None => String::from("Kita"),
+//     //         }
+//     //     })
+//     //     .collect::<Vec<String>>();
+// }
 
 fn update(app: &mut App) -> Result<()> {
     if event::poll(std::time::Duration::from_millis(250))? {
@@ -136,7 +141,7 @@ fn update(app: &mut App) -> Result<()> {
                 match key.code {
                     Char('q') => app.running = false,
                     // change screens
-                    Char('1') => app.screen = Screen::ONE,
+                    Char('1') => app.screen = Screen::WELCOME,
                     Char('4') => app.screen = Screen::BROWSER,
                     // player controls
                     Char('p') => app.tx.send(ThreadMessage {
@@ -248,8 +253,6 @@ fn run() -> Result<()> {
             )));
         }
     };
-
-    // let path = PathBuf::from(env::current_dir()?);
 
     let browser_state = BrowserStateBuilder::new().path(home_dir)?.build();
 
