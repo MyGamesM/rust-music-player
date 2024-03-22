@@ -24,6 +24,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+#[allow(unused_imports)]
 use ratatui::{prelude::*, widgets::*};
 
 #[allow(dead_code)]
@@ -163,7 +164,7 @@ fn update(app: &mut App) -> Result<()> {
                         Char('j') => app.browser_state.next(),
                         Char('k') => app.browser_state.previous(),
                         Char('r') => app.browser_state.update_state()?,
-                        KeyCode::Enter => match app.browser_state.get_file_type() {
+                        KeyCode::Enter | Char('l') => match app.browser_state.get_file_type() {
                             FileType::FILE => {
                                 app.play_song()?;
                             }
@@ -172,7 +173,7 @@ fn update(app: &mut App) -> Result<()> {
                             }
                             FileType::NONE => {}
                         },
-                        KeyCode::Backspace => app.browser_state.pop(),
+                        KeyCode::Backspace | Char('h') => app.browser_state.pop(),
                         _ => {}
                     }
                 }
@@ -259,7 +260,7 @@ fn run() -> Result<()> {
     let mut app = App {
         running: true,
         browser_state,
-        screen: Screen::BROWSER,
+        screen: Screen::WELCOME,
         tx,
     };
 

@@ -46,6 +46,8 @@ fn read_dir(path: &PathBuf) -> Option<Vec<String>> {
 
     items.retain(|item| !item.starts_with("."));
 
+    // TODO check if all files are music and if so sort by track number
+
     Some(items)
 }
 
@@ -195,7 +197,7 @@ pub fn browser(app: &mut App, f: &mut Frame) -> Result<()> {
 
     f.render_stateful_widget(
         List::new(app.browser_state.items.clone())
-            .highlight_symbol(">>")
+            .highlight_symbol("$ ")
             .highlight_style(Style::default().bg(Color::DarkGray)),
         layout[0],
         &mut app.browser_state.state,
