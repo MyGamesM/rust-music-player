@@ -1,5 +1,7 @@
+use crate::song::{Song, SongBuilder};
 use crate::App;
 use color_eyre::eyre::Result;
+use permutation::permutation;
 use ratatui::{prelude::*, widgets::*};
 use std::fs::metadata;
 use std::path::PathBuf;
@@ -34,6 +36,7 @@ pub struct BrowserStateBuilder {
 
 fn read_dir(path: &PathBuf) -> Option<Vec<String>> {
     let reader = std::fs::read_dir(&path).ok()?;
+
     let mut items = reader
         .filter_map(|entry| {
             entry.ok().and_then(|e| {
@@ -48,7 +51,33 @@ fn read_dir(path: &PathBuf) -> Option<Vec<String>> {
 
     // TODO check if all files are music and if so sort by track number
 
+    if items.iter().all(|s| s.ends_with(".mp3")) {
+        items = sort_by_track_number(&items, &path)
+    }
+
     Some(items)
+}
+
+fn sort_by_track_number(song_names: &Vec<String>, path: &PathBuf) -> Vec<String> {
+    let songs = song_names
+        .iter()
+        .map(|name| {
+            SongBuilder::new()
+                .from_path(&PathBuf::from(format!("{}/{}", path.display(), name)))
+                .expect("REASON")
+                .build()
+        })
+        .collect::<Vec<Song>>();
+
+    let track_numbers: Vec<&u16> = songs.iter().map(|song| song.track_number()).collect();
+
+    let permutation = permutation::sort(&track_numbers);
+
+    permutation
+        .apply_slice(&songs)
+        .iter()
+        .map(|song| song.title())
+        .collect()
 }
 
 impl BrowserStateBuilder {
@@ -91,7 +120,7 @@ impl BrowserState {
     }
 
     pub fn update_state(&mut self) -> Result<()> {
-        self.items = read_dir(&self.path).expect("Error while reading dir");
+        self.items = read_dir(&self.path).expect("Error while reading dir in update_state");
 
         let mut i = match self.state.selected() {
             Some(i) => i,

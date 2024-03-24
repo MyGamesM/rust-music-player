@@ -108,8 +108,8 @@ impl SongBuilder {
 
         match album.artist {
             Some(artist) => self.artist = artist.to_owned(),
-            None => panic!("return Err: Artist"),
-        }
+            None => return Err(eyre!("Song: artist")),
+        };
 
         match tag.track_number() {
             Some(t) => self.track_number = t,

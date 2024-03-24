@@ -164,7 +164,7 @@ fn update(app: &mut App) -> Result<()> {
                         Char('j') => app.browser_state.next(),
                         Char('k') => app.browser_state.previous(),
                         Char('r') => app.browser_state.update_state()?,
-                        KeyCode::Enter | Char('l') => match app.browser_state.get_file_type() {
+                        Char('l') => match app.browser_state.get_file_type() {
                             FileType::FILE => {
                                 app.play_song()?;
                             }
@@ -282,31 +282,34 @@ fn run() -> Result<()> {
     Ok(())
 }
 
-pub fn install_hooks() -> Result<()> {
-    // add any extra configuration you need to the hook builder
-    let hook_builder = color_eyre::config::HookBuilder::default();
-    let (panic_hook, eyre_hook) = hook_builder.into_hooks();
-
-    // convert from a color_eyre PanicHook to a standard panic hook
-    let panic_hook = panic_hook.into_panic_hook();
-    panic::set_hook(Box::new(move |panic_info| {
-        shutdown().unwrap();
-        panic_hook(panic_info);
-    }));
-
-    // convert from a color_eyre EyreHook to a eyre ErrorHook
-    let eyre_hook = eyre_hook.into_eyre_hook();
-    eyre::set_hook(Box::new(move |error| {
-        shutdown().unwrap();
-        eyre_hook(error)
-    }))?;
-
-    Ok(())
-}
+// pub fn install_hooks() -> Result<()> {
+//     // add any extra configuration you need to the hook builder
+//     let hook_builder = color_eyre::config::HookBuilder::default();
+//     let (panic_hook, eyre_hook) = hook_builder.into_hooks();
+//
+//     // convert from a color_eyre PanicHook to a standard panic hook
+//     let panic_hook = panic_hook.into_panic_hook();
+//     panic::set_hook(Box::new(move |panic_info| {
+//         shutdown().unwrap();
+//         panic_hook(panic_info);
+//     }));
+//
+//     // convert from a color_eyre EyreHook to a eyre ErrorHook
+//     let eyre_hook = eyre_hook.into_eyre_hook();
+//     eyre::set_hook(Box::new(move |error| {
+//         shutdown().unwrap();
+//         eyre_hook(error)
+//     }))?;
+//
+//     Ok(())
+// }
 
 fn main() -> Result<()> {
+    // env::set_var("RUST_BACKTRACE", "full");
+
     startup()?;
-    install_hooks()?;
+    color_eyre::install()?;
+    // install_hooks()?;
 
     let result = run();
 
