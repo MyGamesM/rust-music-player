@@ -77,7 +77,14 @@ impl PlaylistBuilder {
     }
 
     pub fn sort_by_track_number(mut self) -> PlaylistBuilder {
-        let track_numbers: Vec<&u16> = self.songs.iter().map(|song| song.track_number()).collect();
+        let track_numbers: Vec<&u16> = self
+            .songs
+            .iter()
+            .filter_map(|song| match song.track_number() {
+                Ok(num) => Some(num),
+                Err(_e) => None,
+            })
+            .collect();
 
         let permutation = permutation::sort(&track_numbers);
 

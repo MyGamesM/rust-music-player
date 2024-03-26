@@ -1,12 +1,12 @@
 use crate::song::{Song, SongBuilder};
 use crate::App;
 use color_eyre::eyre::Result;
+use memoize::memoize;
 use permutation::permutation;
 use ratatui::{prelude::*, widgets::*};
 use std::fs::metadata;
 use std::path::PathBuf;
 
-#[allow(dead_code)]
 #[derive(Clone, PartialEq)]
 pub enum FileType {
     FILE,
@@ -14,7 +14,6 @@ pub enum FileType {
     NONE,
 }
 
-#[allow(dead_code)]
 pub struct BrowserState {
     path: PathBuf,
     items: Vec<String>,
@@ -24,11 +23,9 @@ pub struct BrowserState {
     current_file: Option<PathBuf>,
 }
 
-#[allow(dead_code)]
 pub struct BrowserStateBuilder {
     path: Option<PathBuf>,
     items: Vec<String>,
-    state: ListState,
     file_type: FileType,
     current_dir: PathBuf,
     current_file: PathBuf,
@@ -49,16 +46,15 @@ fn read_dir(path: &PathBuf) -> Option<Vec<String>> {
 
     items.retain(|item| !item.starts_with("."));
 
-    // TODO check if all files are music and if so sort by track number
-
     if items.iter().all(|s| s.ends_with(".mp3")) {
-        items = sort_by_track_number(&items, &path)
+        items = sort_by_track_number(items, path.to_path_buf())
     }
 
     Some(items)
 }
 
-fn sort_by_track_number(song_names: &Vec<String>, path: &PathBuf) -> Vec<String> {
+#[memoize]
+fn sort_by_track_number(song_names: Vec<String>, path: PathBuf) -> Vec<String> {
     let songs = song_names
         .iter()
         .map(|name| {
@@ -69,14 +65,24 @@ fn sort_by_track_number(song_names: &Vec<String>, path: &PathBuf) -> Vec<String>
         })
         .collect::<Vec<Song>>();
 
-    let track_numbers: Vec<&u16> = songs.iter().map(|song| song.track_number()).collect();
+    let track_numbers: Vec<&u16> = songs
+        .iter()
+        .filter_map(|song| match song.track_number() {
+            Ok(num) => Some(num),
+            Err(_e) => None,
+        })
+        .collect();
+
+    if song_names.len() != track_numbers.len() {
+        return song_names;
+    }
 
     let permutation = permutation::sort(&track_numbers);
 
     permutation
         .apply_slice(&songs)
         .iter()
-        .map(|song| song.title())
+        .map(|song| song.get_file_name())
         .collect()
 }
 
@@ -85,7 +91,6 @@ impl BrowserStateBuilder {
         BrowserStateBuilder {
             path: Some(PathBuf::new()),
             items: Vec::new(),
-            state: ListState::default(),
             file_type: FileType::NONE,
             current_dir: PathBuf::new(),
             current_file: PathBuf::new(),
@@ -112,12 +117,11 @@ impl BrowserStateBuilder {
     }
 }
 
-#[allow(dead_code)]
 impl BrowserState {
-    pub fn set_items(&mut self, items: Vec<String>) {
-        self.items = items;
-        self.state = ListState::default();
-    }
+    // pub fn set_items(&mut self, items: Vec<String>) {
+    //     self.items = items;
+    //     self.state = ListState::default();
+    // }
 
     pub fn update_state(&mut self) -> Result<()> {
         self.items = read_dir(&self.path).expect("Error while reading dir in update_state");
@@ -183,7 +187,10 @@ impl BrowserState {
     pub fn select(&mut self) {
         if self.get_file_type() == FileType::DIRECTORY {
             match &self.get_current_dir() {
-                Some(dir) => self.path.push(dir),
+                Some(dir) => {
+                    self.path.push(dir);
+                    self.state.select(Some(0));
+                }
                 None => {}
             }
         }

@@ -4,17 +4,12 @@ mod screen_welcome;
 mod song;
 
 use browser_list::{BrowserState, BrowserStateBuilder, FileType};
-use color_eyre::{
-    eyre,
-    eyre::{Report, Result},
-};
+use color_eyre::eyre::{Report, Result};
 use event::KeyCode;
 use rodio::Sink;
 use rodio::{Decoder, OutputStream};
 use screen_welcome::screen_welcome;
-use std::{
-    fs::File, io, io::BufReader, panic, path::PathBuf, sync::mpsc, sync::mpsc::Sender, thread,
-};
+use std::{fs::File, io, io::BufReader, path::PathBuf, sync::mpsc, sync::mpsc::Sender, thread};
 // use playlist::PlaylistBuilder;
 // use song::Song;
 

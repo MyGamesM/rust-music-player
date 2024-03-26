@@ -1,4 +1,4 @@
-use audiotags::Tag;
+use audiotags::{Album, Tag};
 use color_eyre::eyre::{eyre, Result};
 use metadata::media_file::MediaFileMetadata;
 use std::path::PathBuf;
@@ -7,10 +7,10 @@ use std::path::PathBuf;
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Song {
     title: String,
-    artist: String,
-    album: String,
-    track_number: u16,
-    duration: u64,
+    artist: Option<String>,
+    album: Option<String>,
+    track_number: Option<u16>,
+    duration: Option<u32>,
     path: PathBuf,
 }
 
@@ -18,10 +18,10 @@ pub struct Song {
 #[derive(Default)]
 pub struct SongBuilder {
     title: String,
-    artist: String,
-    album: String,
-    track_number: u16,
-    duration: u64,
+    artist: Option<String>,
+    album: Option<String>,
+    track_number: Option<u16>,
+    duration: Option<u32>,
     path: PathBuf,
 }
 
@@ -34,37 +34,57 @@ impl Song {
 
 impl Song {
     #![allow(dead_code)]
-    pub fn duration_in_minutes_and_seconds(&self) -> String {
-        format!("{}m {}s", self.duration / 60, self.duration % 60)
+    pub fn duration_in_minutes_and_seconds(&self) -> Result<String> {
+        let duration = match self.duration {
+            Some(d) => d,
+            None => return Err(eyre!("Song does not have a duration")),
+        };
+
+        Ok(format!("{}m {}s", duration / 60, duration % 60))
     }
 
-    pub fn print(&self) {
-        println!(
-            "Title: {}\nArtist: {}\nAlbum: {}\nLength: {}",
-            self.title,
-            self.artist,
-            self.album,
-            self.duration_in_minutes_and_seconds()
-        );
-    }
+    // pub fn print(&self) {
+    //     println!(
+    //         "Title: {}\nArtist: {}\nAlbum: {}\nLength: {}",
+    //         self.title,
+    //         self.artist,
+    //         self.album,
+    //         self.duration_in_minutes_and_seconds()
+    //     );
+    // }
 
     pub fn title(&self) -> String {
         self.title.clone()
     }
 
-    pub fn track_number(&self) -> &u16 {
-        &self.track_number
+    pub fn track_number(&self) -> Result<&u16> {
+        match &self.track_number {
+            Some(num) => Ok(num),
+            None => Err(eyre!("Song does not have a track number")),
+        }
     }
 
-    pub fn tags(&self) -> Vec<String> {
-        let v = vec![
-            self.title.clone(),
-            self.artist.clone(),
-            self.album.clone(),
-            String::from(self.track_number.clone().to_string()),
-        ];
-        v
+    pub fn get_path(&self) -> PathBuf {
+        self.path.clone()
     }
+
+    pub fn get_file_name(&self) -> String {
+        format!("{}", self.get_path().display())
+            .split("/")
+            .last()
+            .unwrap()
+            .to_owned()
+    }
+
+    // pub fn tags(&self) -> Vec<String> {
+    //     let v = vec![
+    //         self.title.clone(),
+    //         self.artist.clone(),
+    //         self.album.clone(),
+    //         String::from(self.track_number.clone().to_string()),
+    //     ];
+    //     v
+    // }
 }
 
 #[allow(dead_code)]
@@ -72,10 +92,10 @@ impl SongBuilder {
     pub fn new() -> Self {
         SongBuilder {
             title: String::from(""),
-            artist: String::from(""),
-            album: String::from(""),
-            track_number: 0,
-            duration: 0,
+            artist: Some(String::from("")),
+            album: Some(String::from("")),
+            track_number: Some(0),
+            duration: Some(0),
             path: PathBuf::new(),
         }
     }
@@ -91,33 +111,53 @@ impl SongBuilder {
 
         self.title = match tag.title() {
             Some(title) => title.to_string(),
-            None => return Err(eyre!("Song: Title")),
+            None => return Err(eyre!("Song: title")),
         };
 
-        let album = match tag.album() {
-            Some(album) => album,
-            None => return Err(eyre!("Song: album")),
+        self.track_number = match tag.track_number() {
+            Some(t) => Some(t),
+            None => None,
         };
 
-        self.album = album.title.to_string();
-
-        let duration = match MediaFileMetadata::new(&self.path) {
-            Ok(media) => media,
-            Err(_e) => return Err(eyre!("Song: Duration")),
+        let album: Option<Album<'_>> = match tag.album() {
+            Some(album) => Some(album),
+            None => None,
         };
 
-        match album.artist {
-            Some(artist) => self.artist = artist.to_owned(),
-            None => return Err(eyre!("Song: artist")),
+        self.album = match &album {
+            Some(album) => Some(album.title.to_string()),
+            None => None,
         };
 
-        match tag.track_number() {
-            Some(t) => self.track_number = t,
-            None => return Err(eyre!("Song: track number")),
+        match album {
+            Some(album) => {
+                match album.artist {
+                    Some(artist) => self.artist = Some(artist.to_owned()),
+                    None => return Err(eyre!("Song: artist")),
+                };
+            }
+            None => {}
         }
 
-        match duration._duration {
-            Some(duration) => self.duration = duration.ceil() as u64,
+        let duration: Option<Result<MediaFileMetadata, std::io::Error>> =
+            match MediaFileMetadata::new(&self.path) {
+                Ok(media) => Some(Ok(media)),
+                Err(_) => None,
+            };
+
+        self.duration = match &duration {
+            Some(duration) => match duration {
+                Ok(duration) => match duration._duration {
+                    Some(duration) => Some(duration.ceil() as u32),
+                    None => None,
+                },
+                Err(_e) => None,
+            },
+            None => None,
+        };
+
+        match duration.unwrap().unwrap()._duration {
+            Some(duration) => self.duration = Some(duration.ceil() as u32),
             None => return Err(eyre!("Song: duration")),
         }
 
